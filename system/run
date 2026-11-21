@@ -1,0 +1,4 @@
+#!/bin/sh
+# Usage: system/run <data folder> <output file>
+DIR="$(cd "$(dirname "$0")" && pwd)"
+exec python3 "$DIR/main.py" "$@"
