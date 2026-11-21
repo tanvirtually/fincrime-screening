@@ -262,6 +262,10 @@ document.addEventListener("keydown", e => {
   i = e.key === "ArrowDown" ? Math.min(v.length - 1, i + 1) : Math.max(0, i - 1);
   e.preventDefault(); show(v[i].h.hit_id);
 });
+window.addEventListener("hashchange", () => {
+  const id = location.hash.slice(1);
+  if (id !== current && hits.some(x => x.h.hit_id === id)) show(id);
+});
 funnel(); chips(); list();
 const fromHash = location.hash.slice(1);
 const first = hits.find(x => x.h.hit_id === fromHash) || hits.find(x => x.h.code === "TEMPORAL_IMPOSSIBILITY") || hits[0];
