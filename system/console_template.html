@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Screening review console</title>
+<style>
+  :root {
+    --paper: #eef1f4;
+    --panel: #ffffff;
+    --ink: #1b2430;
+    --muted: #5d6877;
+    --line: #d5dbe2;
+    --clear: #0f7b6c;
+    --clear-bg: #e3f3f0;
+    --match: #b4232a;
+    --match-bg: #fbe8e8;
+    --review: #9a6412;
+    --review-bg: #fbf1de;
+    --link: #3a4fb8;
+    --font: "Avenir Next", "Segoe UI", "Helvetica Neue", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { font-family: var(--font); color: var(--ink); background: var(--paper); font-size: 15px; line-height: 1.45;
+         font-variant-numeric: tabular-nums; }
+  button, input { font: inherit; color: inherit; }
+  :focus-visible { outline: 3px solid var(--link); outline-offset: 2px; }
+
+  .app { display: grid; grid-template-columns: 330px 1fr; height: 100vh; }
+  header.top { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 28px; flex-wrap: wrap;
+               padding: 14px 24px; background: var(--ink); color: #fff; }
+  header.top h1 { font-size: 17px; font-weight: 600; margin: 0; letter-spacing: .01em; }
+  .funnel { display: flex; gap: 22px; font-size: 14px; color: #c9d1db; flex-wrap: wrap; }
+  .funnel b { color: #fff; font-weight: 600; font-size: 16px; margin-right: 4px; }
+  .funnel .c b { color: #7fd9c8; } .funnel .m b { color: #ff9a9f; } .funnel .r b { color: #f3c77a; }
+
+  aside { border-right: 1px solid var(--line); background: var(--panel); display: flex; flex-direction: column; min-height: 0; }
+  .filters { padding: 12px; border-bottom: 1px solid var(--line); display: grid; gap: 8px; }
+  .filters input { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--paper); }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 3px 10px; font-size: 13px; cursor: pointer; }
+  .chip[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+  ul.list { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; }
+  ul.list li button { display: grid; grid-template-columns: 10px 1fr; gap: 10px; width: 100%; text-align: left; border: 0;
+                      border-bottom: 1px solid var(--line); background: none; padding: 10px 12px; cursor: pointer; }
+  ul.list li button:hover { background: var(--paper); }
+  ul.list li button[aria-current="true"] { background: #e2e7ee; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 6px; }
+  .dot.DIFFERENT_ENTITY { background: var(--clear); } .dot.SAME_ENTITY { background: var(--match); } .dot.REVIEW { background: var(--review); }
+  .li-name { font-weight: 600; font-size: 14px; }
+  .li-sub { color: var(--muted); font-size: 12.5px; }
+
+  main { overflow-y: auto; padding: 24px 32px 48px; min-height: 0; }
+  .empty { color: var(--muted); padding: 40px 0; }
+
+  .verdict { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+  .stamp { font-size: 22px; font-weight: 700; padding: 6px 16px; border-radius: 8px; border: 2px solid currentColor; }
+  .stamp.DIFFERENT_ENTITY { color: var(--clear); background: var(--clear-bg); }
+  .stamp.SAME_ENTITY { color: var(--match); background: var(--match-bg); }
+  .stamp.REVIEW { color: var(--review); background: var(--review-bg); }
+  .code { color: var(--muted); font-size: 14px; }
+  .key { font-size: 13px; padding: 3px 9px; border-radius: 6px; background: var(--paper); border: 1px solid var(--line); }
+  .key.ok { color: var(--clear); } .key.bad { color: var(--match); }
+
+  /* the face-off: customer vs listed person */
+  .faceoff { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .fo-head, .fo-row { display: grid; grid-template-columns: 150px 1fr 56px 1fr; align-items: stretch; }
+  .fo-head { background: var(--ink); color: #fff; }
+  .fo-head > div { padding: 12px 16px; }
+  .fo-head .who { font-weight: 600; font-size: 16px; }
+  .fo-head .sub { font-size: 12.5px; color: #c9d1db; }
+  .fo-row { border-top: 1px solid var(--line); }
+  .fo-row > div { padding: 12px 16px; }
+  .fo-label { color: var(--muted); font-size: 13.5px; }
+  .fo-val { font-size: 15.5px; overflow-wrap: anywhere; }
+  .fo-val .unk { color: var(--muted); font-style: italic; }
+  .fo-src { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .fo-mark { display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 700; }
+  .fo-row.agree .fo-mark { color: var(--clear); background: var(--clear-bg); }
+  .fo-row.conflict .fo-mark { color: var(--match); background: var(--match-bg); }
+  .fo-row.unknown .fo-mark { color: var(--muted); background: var(--paper); }
+  .fo-row.conflict .fo-val { font-weight: 600; }
+
+  section.block { margin-top: 22px; }
+  section.block h2 { font-size: 15px; margin: 0 0 8px; }
+  .reason { font-size: 16px; max-width: 72ch; margin: 0; }
+  .next { background: var(--review-bg); border-left: 4px solid var(--review); padding: 12px 16px; border-radius: 0 8px 8px 0; max-width: 72ch; }
+  .evidence { display: flex; gap: 8px; flex-wrap: wrap; }
+  .ev { font-size: 13px; padding: 4px 10px; border-radius: 6px; background: var(--panel); border: 1px solid var(--line); color: var(--link); }
+  ol.trail { margin: 0; padding-left: 20px; color: var(--ink); max-width: 80ch; }
+  ol.trail li { margin: 3px 0; }
+  .other-hits { display: flex; gap: 8px; flex-wrap: wrap; }
+  .other-hits button { border: 1px solid var(--line); background: var(--panel); border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 13px; }
+  .other-hits button[aria-current="true"] { border-color: var(--ink); font-weight: 600; }
+  details.records { margin-top: 8px; }
+  details.records summary { cursor: pointer; color: var(--link); }
+  table.rec { border-collapse: collapse; font-size: 13px; margin-top: 8px; background: var(--panel); }
+  table.rec th, table.rec td { border: 1px solid var(--line); padding: 5px 8px; text-align: left; vertical-align: top; }
+  table.rec th { background: var(--paper); font-weight: 600; }
+
+  @media (max-width: 860px) {
+    .app { grid-template-columns: 1fr; height: auto; }
+    aside { max-height: 45vh; }
+    .fo-head, .fo-row { grid-template-columns: 96px 1fr 40px 1fr; }
+    main { padding: 18px; }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .faceoff .fo-row { transition: background-color .2s; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <h1>Screening review console</h1>
+    <div class="funnel" id="funnel"></div>
+  </header>
+  <aside>
+    <div class="filters">
+      <input id="q" type="search" placeholder="Search name, alert or hit ID" aria-label="Search alerts">
+      <div class="chips" id="chips" role="group" aria-label="Filter by decision"></div>
+    </div>
+    <ul class="list" id="list" aria-label="Hits"></ul>
+  </aside>
+  <main id="main"><p class="empty">Pick a hit on the left.</p></main>
+</div>
+<script>
+const ALERTS = /*__DATA__*/[];
+const LABEL = { DIFFERENT_ENTITY: "Cleared: different person", SAME_ENTITY: "Same person: escalate", REVIEW: "Needs a human" };
+const SHORT = { DIFFERENT_ENTITY: "Cleared", SAME_ENTITY: "Same person", REVIEW: "Review" };
+const CODE = {
+  TEMPORAL_IMPOSSIBILITY: "Customer was too young (or the company didn't exist yet) at the first report",
+  DOB_MISMATCH: "Birth dates don't match", LOCATION_MISMATCH: "No country in common",
+  NAME_MISMATCH_VERIFIED: "Name on their ID doesn't match", ENTITY_TYPE_MISMATCH: "Person vs company",
+  DECEASED: "Listed person died before screening", NAME_DOB_LOCATION_MATCH: "Name, birth date and country match",
+  NAME_DOB_MATCH: "Name and birth date match", NAME_LOCATION_MATCH: "Company name and country match",
+  INSUFFICIENT_DATA: "Not enough to decide", AMBIGUOUS_CUSTOMER_RECORD: "More than one customer fits"
+};
+const MARK = { agree: "✓", conflict: "✕", unknown: "?" };
+const MARK_SR = { agree: "matches", conflict: "conflicts", unknown: "can't compare" };
+
+const hits = [];
+ALERTS.forEach(a => a.hits.forEach(h => hits.push({ a, h })));
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+let filter = "ALL", query = "", current = null;
+
+function funnel() {
+  const n = { DIFFERENT_ENTITY: 0, SAME_ENTITY: 0, REVIEW: 0 };
+  hits.forEach(({ h }) => n[h.decision]++);
+  const pr = hits.filter(x => x.h.practice);
+  const right = pr.filter(x => x.h.practice === x.h.decision).length;
+  document.getElementById("funnel").innerHTML =
+    `<span><b>${hits.length}</b>hits screened</span>` +
+    `<span class="c"><b>${n.DIFFERENT_ENTITY}</b>cleared automatically</span>` +
+    `<span class="m"><b>${n.SAME_ENTITY}</b>confirmed matches</span>` +
+    `<span class="r"><b>${n.REVIEW}</b>left for an analyst</span>` +
+    (pr.length ? `<span><b>${right}/${pr.length}</b>practice answers right</span>` : "");
+}
+
+function chips() {
+  const opts = [["ALL", "All"], ["DIFFERENT_ENTITY", "Cleared"], ["SAME_ENTITY", "Same person"], ["REVIEW", "Review"], ["PRACTICE", "Has answer key"]];
+  const el = document.getElementById("chips");
+  el.innerHTML = opts.map(([k, t]) => `<button class="chip" data-k="${k}" aria-pressed="${filter === k}">${t}</button>`).join("");
+  el.querySelectorAll("button").forEach(b => b.onclick = () => { filter = b.dataset.k; chips(); list(); });
+}
+
+function visible() {
+  const q = query.toLowerCase();
+  return hits.filter(({ a, h }) => {
+    if (filter === "PRACTICE" && !h.practice) return false;
+    if (!["ALL", "PRACTICE"].includes(filter) && h.decision !== filter) return false;
+    if (!q) return true;
+    return [a.screened.name, h.name, a.alert_id, h.hit_id].some(s => String(s || "").toLowerCase().includes(q));
+  });
+}
+
+function list() {
+  const v = visible();
+  const el = document.getElementById("list");
+  el.innerHTML = v.slice(0, 400).map(({ a, h }) =>
+    `<li><button data-id="${h.hit_id}" aria-current="${current === h.hit_id}">
+       <span class="dot ${h.decision}" aria-hidden="true"></span>
+       <span><span class="li-name">${esc(a.screened.name)}</span><br>
+       <span class="li-sub">vs ${esc(h.name)} · ${SHORT[h.decision]}</span></span>
+     </button></li>`).join("") || `<li class="empty" style="padding:16px">No hits match this filter.</li>`;
+  el.querySelectorAll("button").forEach(b => b.onclick = () => show(b.dataset.id));
+}
+
+function val(v) { return v ? esc(v) : `<span class="unk">not known</span>`; }
+
+function show(id) {
+  current = id;
+  if (location.hash.slice(1) !== id) history.replaceState(null, "", "#" + id);
+  const { a, h } = hits.find(x => x.h.hit_id === id);
+  const c = a.customers[0];
+  const key = h.practice ? (h.practice === h.decision
+      ? `<span class="key ok">Matches the answer key</span>`
+      : `<span class="key bad">Answer key says ${SHORT[h.practice]}</span>`) : "";
+  const rows = (h.rows || []).map(r => `
+    <div class="fo-row ${r.state}">
+      <div class="fo-label">${esc(r.label)}</div>
+      <div class="fo-val">${val(r.cust)}${r.src ? `<span class="fo-src">${esc(r.note || "source")}: ${esc(r.src)}</span>` : ""}</div>
+      <div class="fo-mark" aria-label="${MARK_SR[r.state]}">${MARK[r.state]}</div>
+      <div class="fo-val">${val(r.hit)}${r.label.startsWith("Born") && h.dob_src ? `<span class="fo-src">from ${esc(h.dob_src)}${h.dob_ids.length ? " " + esc(h.dob_ids.join(", ")) : ""}</span>` : ""}</div>
+    </div>`).join("");
+  const trail = [];
+  trail.push(`Screened as <b>${esc(a.screened.name)}</b>${a.screened.dob ? `, born ${esc(a.screened.dob)}` : ""} on ${esc(a.screened_at)}`);
+  trail.push(a.link ? `Followed the alert's ${a.link_kind} link <b>${esc(a.link)}</b>` : `No link on the alert, so searched all customers by the screened details`);
+  if (a.customers.length > 1) trail.push(`${a.customers.length} different people fit: ${a.customers.map(x => esc(x.linked)).join(", ")}`);
+  if (c) {
+    if (c.records.length > 1) trail.push(`Same phone and birth date, or same ID document: one person across ${c.records.map(r => esc(r.record_id)).join(", ")}`);
+    trail.push(c.check ? `Latest approved ID check <b>${esc(c.check.id)}</b> (${esc(c.check.date)}): ${esc(c.check.name)}, born ${esc(c.check.dob)}${c.check.country ? ", " + esc(c.check.country) : ""}` : `No approved ID check found, so only what the customer typed in`);
+  }
+  const others = a.hits.length > 1 ? `
+    <section class="block"><h2>Other hits on this alert</h2><div class="other-hits">
+      ${a.hits.map(x => `<button data-id="${x.hit_id}" aria-current="${x.hit_id === id}"><span class="dot ${x.decision}" style="display:inline-block;margin:0 6px 0 0"></span>${esc(x.name)}</button>`).join("")}
+    </div></section>` : "";
+  const records = c ? `
+    <details class="records"><summary>Show the customer's records</summary>
+      <table class="rec"><tr><th>Record</th><th>Name</th><th>Born</th><th>Nationality</th><th>Lives in</th><th>City</th><th>Status</th></tr>
+      ${c.records.map(r => `<tr><td>${esc(r.record_id)}</td><td>${esc(r.full_name)}</td><td>${esc(r.dob)}</td><td>${esc(r.nationality)}</td><td>${esc(r.residence_country)}</td><td>${esc(r.city)}</td><td>${esc(r.status)}</td></tr>`).join("")}
+      </table></details>` : "";
+
+  document.getElementById("main").innerHTML = `
+    <div class="verdict">
+      <span class="stamp ${h.decision}">${LABEL[h.decision]}</span>
+      <span class="code">${esc(CODE[h.code] || h.code)}</span>
+      ${key}
+    </div>
+    <div class="faceoff" role="table" aria-label="Customer compared with the listed person">
+      <div class="fo-head">
+        <div></div>
+        <div><div class="who">The customer</div><div class="sub">${c ? esc(h.customer_record_id === "AMBIGUOUS" ? "several customers fit" : (h.customer_record_id || c.linked)) : "no record found"}</div></div>
+        <div></div>
+        <div><div class="who">The listed person</div><div class="sub">${esc(h.hit_id)} · ${esc(h.category || "watchlist")}</div></div>
+      </div>
+      ${rows || `<div class="fo-row unknown"><div class="fo-label">—</div><div class="fo-val"><span class="unk">No customer record fits the screened details</span></div><div class="fo-mark">?</div><div class="fo-val">${esc(h.name)}</div></div>`}
+    </div>
+    <section class="block"><h2>Why</h2><p class="reason">${esc(h.reason)}</p></section>
+    ${h.next ? `<section class="block"><h2>What would settle it</h2><div class="next">${esc(h.next)}</div></section>` : ""}
+    <section class="block"><h2>Records cited</h2><div class="evidence">${h.evidence.map(e => `<span class="ev">${esc(e)}</span>`).join("") || `<span class="code">none</span>`}</div></section>
+    <section class="block"><h2>How the customer was found</h2><ol class="trail">${trail.map(t => `<li>${t}</li>`).join("")}</ol>${records}</section>
+    ${others}`;
+  document.querySelectorAll(".other-hits button").forEach(b => b.onclick = () => show(b.dataset.id));
+  list();
+  const btn = document.querySelector(`#list button[data-id="${id}"]`);
+  if (btn) btn.scrollIntoView({ block: "nearest" });
+}
+
+document.getElementById("q").addEventListener("input", e => { query = e.target.value; list(); });
+document.addEventListener("keydown", e => {
+  if (!["ArrowDown", "ArrowUp"].includes(e.key) || e.target.id === "q") return;
+  const v = visible(); if (!v.length) return;
+  let i = v.findIndex(x => x.h.hit_id === current);
+  i = e.key === "ArrowDown" ? Math.min(v.length - 1, i + 1) : Math.max(0, i - 1);
+  e.preventDefault(); show(v[i].h.hit_id);
+});
+funnel(); chips(); list();
+const fromHash = location.hash.slice(1);
+const first = hits.find(x => x.h.hit_id === fromHash) || hits.find(x => x.h.code === "TEMPORAL_IMPOSSIBILITY") || hits[0];
+if (first) show(first.h.hit_id);
+</script>
+</body>
+</html>

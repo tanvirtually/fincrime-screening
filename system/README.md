@@ -83,6 +83,16 @@ If a record is malformed and something throws, that hit alone goes to REVIEW wit
 
 No randomness, no model calls, sorted iteration everywhere. Five runs give the same file.
 
+## Review console
+
+`system/console.py` turns the output into a one-page review console for analysts: the customer and the listed person side by side (name, birth date, countries, age at first report) with a ✓, ✕ or ? on each row, the decision and reason, the records cited, how the customer was found, and for every REVIEW what would settle it.
+
+```
+python3 system/console.py dev output/dev.jsonl console.html
+```
+
+The page embeds dataset records, so it stays local (`console.html` is in `.gitignore`).
+
 ## Three cases
 
 **Clear mismatch (H-58A39C → DIFFERENT_ENTITY, DOB_MISMATCH).** The alert's account is joint, and the screened name and DOB pick CUS-604925. The latest approved check KYC-232AE0 gives 1965-03-28. The hit lists 1962-09-10. Three years apart, so it's a different person.
