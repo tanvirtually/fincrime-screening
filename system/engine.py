@@ -16,11 +16,29 @@ def read_jsonl(path):
         return [json.loads(l) for l in f if l.strip()]
 
 
+LIST_FIELDS = ("aliases", "dobs", "nationality", "citizenship", "countries", "addresses", "categories",
+               "identifiers", "sources", "source_urls")
+
+
+def _norm_hit(h):
+    for k in LIST_FIELDS:
+        v = h.get(k)
+        if v is None:
+            h[k] = []
+        elif isinstance(v, str):
+            h[k] = [x.strip() for x in v.split(";") if x.strip()]
+        elif not isinstance(v, list):
+            h[k] = [v]
+        h[k] = [str(x) if not isinstance(x, (str, dict)) else x for x in h[k]]
+        h[k] = [x if isinstance(x, str) else " ".join(str(y) for y in x.values()) for x in h[k]]
+    return h
+
+
 class Data:
     def __init__(self, folder):
         p = lambda n: os.path.join(folder, n)
         self.alerts = read_jsonl(p("alerts.jsonl"))
-        self.hits = {h["hit_id"]: h for h in read_jsonl(p("hits.jsonl"))}
+        self.hits = {h["hit_id"]: _norm_hit(h) for h in read_jsonl(p("hits.jsonl"))}
         self.customers = {c["record_id"]: c for c in read_jsonl(p("customers.jsonl"))}
         accounts = read_jsonl(p("accounts.jsonl"))
         onboarding = read_jsonl(p("onboarding.jsonl"))
@@ -139,6 +157,25 @@ DATE_TOKEN = re.compile(
     re.I)
 
 
+def _dob_near_cue(t):
+    """The date that a birth cue points at: the first one right after it, else just before it."""
+    for cue in BIRTH_CUE.finditer(t):
+        rest = t[cue.end():]
+        cands = []
+        found = D.find_dates(rest)
+        if found and found[0][0] <= 30:
+            cands.append((found[0][0], found[0][2]))
+        m = re.match(r"[\s:,.(\-]*(?:[a-z]+\s+){0,3}?((?:19|20)\d{2})\b(?![-/.]\d)", rest, re.I)
+        if m:
+            cands.append((m.start(1), (int(m.group(1)), None, None)))
+        if cands:
+            return min(cands, key=lambda c: c[0])[1]
+        before = [f for f in D.find_dates(t[:cue.start()]) if cue.start() - f[1] <= 25]
+        if before:
+            return before[-1][2]
+    return None
+
+
 def parse_kyc_note(note):
     """An onboarding note that records an identity check. Returns dict or None."""
     t = note.get("text") or ""
@@ -146,17 +183,10 @@ def parse_kyc_note(note):
         return None
     if NEG_CUE.search(t):
         return {"approved": False}
-    dates = [(m.start(), m.group(0)) for m in DATE_TOKEN.finditer(t)]
-    dob = None
-    for cue in BIRTH_CUE.finditer(t):
-        best = None
-        for pos, s in dates:
-            dist = pos - cue.end()
-            if -60 < dist < 60 and (best is None or abs(dist) < abs(best[0])):
-                best = (dist, s)
-        if best:
-            dob = D.parse_one(best[1])
-            break
+    dob = _dob_near_cue(t)
+    created = D.parse_one(note.get("created_at"))
+    if dob and created and not (1900 <= dob[0] <= created[0] - 10):
+        dob = None  # not a plausible birth date for someone checked on that day
     if not dob:
         return None
     # verified name: longest run of capitalised words that is all-caps
@@ -335,25 +365,47 @@ def hit_countries(h):
 def _age_facts(text):
     """Age-at-date statements in a short text -> list of (years, snippet)."""
     out = []
-    for sent in re.split(r"(?<=[.!?])\s+", text or ""):
-        when = MONTH_YEAR.search(sent)
-        if not when:
-            yr = re.search(r"\b(19|20)\d{2}\b", sent)
-            when_d = (int(yr.group(0)), None, None) if yr else None
+    for sent in re.split(r"(?<=[.!?])\s+(?=[A-Z0-9])", text or ""):
+        s2 = D.words_to_numbers(sent)
+        found = D.find_dates(s2)
+        if found:
+            when_d = found[0][2]
+            cleaned = s2
+            for a, b, _ in reversed(found):
+                cleaned = cleaned[:a] + " " + cleaned[b:]
         else:
-            when_d = D.parse_one(re.sub(r",", "", when.group(1)))
-        if not when_d:
-            continue
-        cleaned = DATE_TOKEN.sub(" ", sent)
-        cleaned = MONTH_YEAR.sub(" ", cleaned)
+            yr = re.search(r"\b(19|20)\d{2}\b", s2)
+            if not yr:
+                continue
+            when_d = (int(yr.group(0)), None, None)
+            cleaned = s2[:yr.start()] + " " + s2[yr.end():]
         cleaned = re.sub(r"\b(19|20)\d{2}\b", " ", cleaned)
-        ages = [int(x) for x in re.findall(r"(?<![\d-])(\d{1,3})(?![\d])", cleaned) if 10 <= int(x) <= 110]
-        cue = AGE_CUE.search(cleaned)
-        if cue:
-            ages = [int(g) for g in cue.groups() if g]
-        if cue and len(set(a for a in ages if 10 <= a <= 110)) == 1:
+        ages = []
+        for m in AGE_CUE.finditer(cleaned):
+            ages += [int(g) for g in m.groups() if g]
+        ages = sorted({a for a in ages if 10 <= a <= 110})
+        if len(ages) == 1:
             out.append((D.birth_years_from_age(ages[0], when_d), sent.strip()))
     return out
+
+
+BORN_RE = re.compile(r"\b(?:born|date of birth|dob|d\.o\.b\.?|birth ?date)\b", re.I)
+
+
+def _born_fact(text):
+    """'X was born on 17 July 1939' / 'born in 1952' / 'DOB: 1960-04-10' -> date or None."""
+    for sent in re.split(r"(?<=[.!?])\s+(?=[A-Z0-9])", text or ""):
+        cue = BORN_RE.search(sent)
+        if not cue:
+            continue
+        rest = sent[cue.end():]
+        found = D.find_dates(rest)
+        if found and found[0][0] < 25:
+            return found[0][2]
+        m = re.match(r"\W{0,3}(?:on|in|:)?\s*(?:the year\s+)?((?:19|20)\d{2})\b", rest, re.I)
+        if m:
+            return (int(m.group(1)), None, None)
+    return None
 
 
 def hit_dobs(data, h):
@@ -367,11 +419,9 @@ def hit_dobs(data, h):
     notes = h.get("profile_notes") or ""
     first = notes.strip().split("\n\n")[0] if notes.strip() else ""
     if first and not first.startswith("According to"):
-        m = re.search(r"\bborn\b[^.]*?\b(?:on|in)\s+([^.;]+?\d{4})", first, re.I)
-        if m:
-            d = D.parse_one(m.group(1).strip().rstrip(","))
-            if d:
-                return [("date", d)], "profile notes", []
+        d = _born_fact(first)
+        if d:
+            return [("date", d)], "profile notes", []
         ages = _age_facts(first)
         if ages:
             ys = sorted({y for a in ages for y in a[0]})
@@ -606,22 +656,44 @@ def decide(data, alert, hit_id, people_cache):
                 evidence=recs)
 
 
+def _safe_review(alert_id, hit_id, err):
+    return dict(hit_id=hit_id, alert_id=alert_id, decision="REVIEW", reason_code="INSUFFICIENT_DATA",
+                customer_record_id=None,
+                reason="The system could not process this hit automatically, so it goes to a person to review.",
+                evidence=[], _error=repr(err))
+
+
 def run(folder):
     data = Data(folder)
     out = []
+    done = set()
     for alert in data.alerts:
-        resolved, _ = resolve(data, alert)
-        people = [(rec, Person(data, members)) for rec, members in resolved]
-        for hid in alert["hit_ids"]:
-            if hid in data.hits:
+        try:
+            resolved, _ = resolve(data, alert)
+            people = [(rec, Person(data, members)) for rec, members in resolved]
+        except Exception as e:  # never let one alert kill the run
+            people, err = None, e
+        for hid in alert.get("hit_ids") or []:
+            if hid not in data.hits or hid in done:
+                continue
+            done.add(hid)
+            if people is None:
+                out.append(_safe_review(alert["alert_id"], hid, err))
+                continue
+            try:
                 out.append(decide(data, alert, hid, people))
-    # hits not listed in any alert
-    listed = {r["hit_id"] for r in out}
+            except Exception as e:
+                out.append(_safe_review(alert["alert_id"], hid, e))
+    # hits not listed in any alert's hit_ids
     by_alert = {a["alert_id"]: a for a in data.alerts}
     for hid, h in sorted(data.hits.items()):
-        if hid not in listed and h.get("alert_id") in by_alert:
-            alert = by_alert[h["alert_id"]]
+        if hid in done:
+            continue
+        alert = by_alert.get(h.get("alert_id"))
+        try:
             resolved, _ = resolve(data, alert)
             people = [(rec, Person(data, m)) for rec, m in resolved]
             out.append(decide(data, alert, hid, people))
+        except Exception as e:
+            out.append(_safe_review(h.get("alert_id"), hid, e))
     return out

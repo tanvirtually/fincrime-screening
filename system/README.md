@@ -12,7 +12,8 @@ Python 3 standard library only. No language model calls, no network. A run on th
 |---|---|
 | Practice labels | 50 / 50 right decisions, 0 unsafe clearances |
 | Reason code / customer record on right decisions | 100% / 100% |
-| Decision mix (all 819 hits) | 56% cleared, 15% same entity, 30% review |
+| Decision mix (all 819 hits) | 57% cleared, 15% same entity, 28% review |
+| Stress test (3 reworded copies of the data) | all 819 decisions unchanged, 0 unsafe clearances |
 | Run to run | byte-identical output |
 
 ## Architecture
@@ -59,6 +60,25 @@ Confirm a person on name + DOB with nothing contradicting, and a company on name
 
 Every fact carries the ID of the record it came from. The evidence list holds only the IDs behind the decisive facts: the KYC check or note for a DOB or name contradiction, the customer records and notes that supplied the countries for a location decision, and the search result when the hit's DOB came from the web.
 
+## Stress test: does it survive new wording?
+
+The unseen set has "differently worded free text", so we test for that directly. `tests/perturb.py` makes a copy of the dev data with the same facts in different words:
+
+- every date in notes, profiles, search results, KYC checks and customer records rewritten in another format ("the 3rd of March 1990", "3-Mar-1990", "March 3, 1990", "1990/03/03")
+- ages written as words ("he was forty-six", "a thirty-year-old")
+- synonyms in onboarding notes ("D.O.B.", "date of birth", "birth date"; "authenticated" for "verified")
+
+```
+python3 tests/perturb.py dev /tmp/dev-reworded 1
+system/run /tmp/dev-reworded /tmp/out.jsonl
+```
+
+On three reworded copies, all 819 decisions match the run on the original data, the practice score stays 50/50, and there are no unsafe clearances. The first version of this test found two real bugs (a birth year written alone, like "D.O.B. 1995", was missed, and the check date was read as a birth date). Both are fixed, and a birth date less than 10 years before the ID check is now rejected as implausible.
+
+Numeric dates where day and month can't be told apart (05/06/1990) keep only the year. That way a US/UK date mix-up can never produce a false month mismatch, and so never a wrong clearance.
+
+If a record is malformed and something throws, that hit alone goes to REVIEW with a warning on stderr. The run never crashes.
+
 ## Determinism
 
 No randomness, no model calls, sorted iteration everywhere. Five runs give the same file.
@@ -73,5 +93,5 @@ No randomness, no model calls, sorted iteration everywhere. Five runs give the s
 
 ## Known limits
 
-- Free-text parsing is rule-based. Wording far from what's in the development set (an age written as a word, a check described without a birth cue) is missed. When that happens the fact is unknown, which leads to REVIEW, not to a wrong clearance.
+- Free-text parsing is rule-based. Wording far from anything tested (a check described without any birth cue, an age given only as "in his forties") is missed. When that happens the fact is unknown, which leads to REVIEW, not to a wrong clearance.
 - Free-text country mentions can add a country that isn't really the customer's. That only makes a location clearance less likely, which is the safe direction.
