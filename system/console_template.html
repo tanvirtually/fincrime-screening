@@ -163,7 +163,11 @@ function chips() {
   const opts = [["ALL", "All"], ["DIFFERENT_ENTITY", "Cleared"], ["SAME_ENTITY", "Same person"], ["REVIEW", "Review"], ["PRACTICE", "Has answer key"]];
   const el = document.getElementById("chips");
   el.innerHTML = opts.map(([k, t]) => `<button class="chip" data-k="${k}" aria-pressed="${filter === k}">${t}</button>`).join("");
-  el.querySelectorAll("button").forEach(b => b.onclick = () => { filter = b.dataset.k; chips(); list(); });
+  el.querySelectorAll("button").forEach(b => b.onclick = () => {
+    filter = b.dataset.k; chips(); list();
+    const v = visible();
+    if (v.length && !v.some(x => x.h.hit_id === current)) show(v[0].h.hit_id);
+  });
 }
 
 function visible() {
@@ -179,7 +183,7 @@ function visible() {
 function list() {
   const v = visible();
   const el = document.getElementById("list");
-  el.innerHTML = v.slice(0, 400).map(({ a, h }) =>
+  el.innerHTML = v.map(({ a, h }) =>
     `<li><button data-id="${h.hit_id}" aria-current="${current === h.hit_id}">
        <span class="dot ${h.decision}" aria-hidden="true"></span>
        <span><span class="li-name">${esc(a.screened.name)}</span><br>
@@ -244,7 +248,8 @@ function show(id) {
     <section class="block"><h2>How the customer was found</h2><ol class="trail">${trail.map(t => `<li>${t}</li>`).join("")}</ol>${records}</section>
     ${others}`;
   document.querySelectorAll(".other-hits button").forEach(b => b.onclick = () => show(b.dataset.id));
-  list();
+  document.querySelectorAll("#list button[data-id]").forEach(b =>
+    b.setAttribute("aria-current", String(b.dataset.id === id)));
   const btn = document.querySelector(`#list button[data-id="${id}"]`);
   if (btn) btn.scrollIntoView({ block: "nearest" });
 }

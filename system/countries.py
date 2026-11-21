@@ -44,6 +44,7 @@ ALIASES = {
     "macao special administrative region of china": "Macao", "macau": "Macao",
     "hong kong special administrative region of china": "Hong Kong", "viet nam": "Vietnam",
     "turkiye": "Turkey", "democratic republic of the congo": "DR Congo", "drc": "DR Congo", "burma": "Myanmar", "macedonia": "North Macedonia", "uae": "United Arab Emirates", "republic of ireland": "Ireland",
+    "eire": "Ireland", "ceylon": "Sri Lanka", "east pakistan": "Bangladesh",
     "syrian arab republic": "Syria", "iran, islamic republic of": "Iran", "moldova, republic of": "Moldova",
 }
 

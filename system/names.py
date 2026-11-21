@@ -12,11 +12,23 @@ LEGAL_FORMS = set(
 VARIANT_GROUPS = []  # filled by load_variants()
 _variant_index = {}
 
+# Short forms the data pack's list leaves out. Bengali and Malay records often
+# write Muhammad as "Md", "Mhd" or "Muhd". Treating them as the same part only
+# makes names agree more often, so it can stop a clearance but never cause one.
+EXTRA_GROUPS = [
+    ["muhammad", "mohammed", "mohammad", "mohamed", "muhammed", "mohamad", "mohd",
+     "muhamad", "md", "mhd", "muhd"],
+]
+
+# Apostrophes inside a name (O'Brien, D'Souza, curly or straight) are dropped,
+# not turned into a space, so O'Dea, ODea and "O Dea" all become "odea".
+APOSTROPHES = re.compile(r"['’‘`´]")
+
 
 def load_variants(groups, legal_forms=None):
     """groups: list of lists of name forms (from name_variants.json)."""
     global VARIANT_GROUPS, _variant_index, LEGAL_FORMS
-    VARIANT_GROUPS = [[strip(n) for n in g] for g in groups]
+    VARIANT_GROUPS = [[strip(n) for n in g] for g in list(groups) + EXTRA_GROUPS]
     _variant_index = {}
     for i, g in enumerate(VARIANT_GROUPS):
         for n in g:
@@ -39,9 +51,21 @@ def parts(name, company=False):
     s = re.sub(r"\([^)]*\)|\[[^\]]*\]|\{[^}]*\}", " ", s)
     if s.strip() in PLACEHOLDERS:
         return []
+    s = APOSTROPHES.sub("", s)
     s = re.sub(r"[^a-z0-9\s]", " ", s)
+    raw = s.split()
+    # Irish "O Dea" written apart: join the lone O to the next part.
+    joined = []
+    i = 0
+    while i < len(raw):
+        if raw[i] == "o" and i + 1 < len(raw) and len(raw[i + 1]) >= 2 and not company:
+            joined.append("o" + raw[i + 1])
+            i += 2
+        else:
+            joined.append(raw[i])
+            i += 1
     out = []
-    for p in s.split():
+    for p in joined:
         if len(p) == 1 or p in PLACEHOLDERS or any(ch.isdigit() for ch in p):
             continue
         if company and p in LEGAL_FORMS:
