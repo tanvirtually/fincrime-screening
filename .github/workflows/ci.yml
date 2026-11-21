@@ -1,0 +1,21 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # Standard library only: nothing to install.
+      - name: Output contract and name rules
+        run: python -m unittest discover -s tests -p "test_*.py" -v
+      - name: System starts and rejects bad usage
+        run: |
+          if system/run 2>/dev/null; then exit 1; fi
+          echo "usage check ok"

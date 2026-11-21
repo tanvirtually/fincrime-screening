@@ -124,6 +124,19 @@ A date like 05/06/1990, where day and month could be either way round, keeps onl
 
 If a record is broken and causes an error, that one hit goes to a human with a warning. The run never stops part-way.
 
+Before each line is written, it's checked against the output rules: a known decision, a reason code that belongs to that decision, a list of record IDs as evidence, and a non-empty reason. A line that fails goes to a human instead, so the output file is always valid.
+
+## Automatic checks
+
+Every push runs GitHub Actions (`.github/workflows/ci.yml`). It needs no dataset:
+
+- `tests/test_contract.py`: every line of `output/dev.jsonl` follows the output rules, with one line per hit.
+- `tests/test_names.py`: the name and country edge cases.
+
+```
+python3 -m unittest discover -s tests -p "test_*.py"
+```
+
 ## Review console
 
 `system/console.py` builds a one-page review screen for analysts. It shows the customer and the listed person side by side (name, birth date, countries, age at first report), with a ✓, ✕ or ? on each row. Below that come the decision, the reason, the records used, how the customer was found and, for anything sent to a human, what would settle it.
