@@ -77,6 +77,8 @@ On three reworded copies, all 819 decisions match the run on the original data, 
 
 Numeric dates where day and month can't be told apart (05/06/1990) keep only the year. That way a US/UK date mix-up can never produce a false month mismatch, and so never a wrong clearance.
 
+An audit of all 819 decisions (not only the 50 with answers) found that about 1,200 onboarding notes record an ID check without any word like "born" or "DOB" ("JACK COOPER (1951-09-10) had his passport verified ..."). For those, the birth date is the one date in the note at least 10 years before it was written. Reading them changed one decision: a customer who typed 1953 on the account but whose verified passport says 1959, matching the listed person. Before, that hit was cleared; now it is confirmed. Names in notes are read in any alphabet (FERNÁNDEZ), with placeholders like N/A or 0000 ignored.
+
 If a record is malformed and something throws, that hit alone goes to REVIEW with a warning on stderr. The run never crashes.
 
 ## Determinism

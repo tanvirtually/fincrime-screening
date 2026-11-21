@@ -176,26 +176,68 @@ def _dob_near_cue(t):
     return None
 
 
+def _dob_without_cue(t, created):
+    """No 'born'/'DOB' word: the DOB is the only date at least 10 years before the note."""
+    if not created:
+        return None
+    old = [d for _, _, d in D.find_dates(t) if d[0] <= created[0] - 10]
+    old = list(dict.fromkeys(old))
+    return old[0] if len(old) == 1 else None
+
+
 def parse_kyc_note(note):
     """An onboarding note that records an identity check. Returns dict or None."""
     t = note.get("text") or ""
-    if not (DOC_CUE.search(t) and BIRTH_CUE.search(t)):
+    has_cue = bool(BIRTH_CUE.search(t))
+    if not (DOC_CUE.search(t) and (has_cue or VERIFY_CUE.search(t))):
         return None
     if NEG_CUE.search(t):
         return {"approved": False}
-    dob = _dob_near_cue(t)
     created = D.parse_one(note.get("created_at"))
+    dob = _dob_near_cue(t) if has_cue else _dob_without_cue(t, created)
     if dob and created and not (1900 <= dob[0] <= created[0] - 10):
         dob = None  # not a plausible birth date for someone checked on that day
     if not dob:
         return None
-    # verified name: longest run of capitalised words that is all-caps
-    caps = re.findall(r"\b[A-Z][A-Z'\-]+(?:\s+[A-Z][A-Z'\-]+)+\b", t)
-    caps = [c for c in caps if not re.fullmatch(r"(?:DOB|ID|KYC|AML|UK|US|USA)(?:\s+\w+)?", c)]
-    name = max(caps, key=len) if caps else None
+    name = caps_name(t)
     ctry = [c for c in C.in_text(t) if not (name and c.lower() in name.lower())]
     return {"approved": True, "name": name, "dob": dob, "country": ctry[0] if ctry else None,
             "date": note.get("created_at") or "", "id": note["note_id"]}
+
+
+ACRONYMS = {"DOB", "D.O.B.", "D.O.B", "ID", "KYC", "AML", "UK", "US", "USA", "UAE", "EU", "PEP", "N/A"}
+_TOKEN = re.compile(r"[^\s,;:()]+")
+
+
+def _is_caps_word(tok):
+    core = tok.strip(".'\u2019-")
+    letters = [c for c in core if c.isalpha()]
+    return len(letters) >= 2 and all(c.isupper() for c in letters) and all(c.isalpha() or c in "'-.\u2019" for c in core)
+
+
+def _is_placeholder(tok):
+    return tok.upper().strip(".") in {"N/A", "NA", "XXX", "NONE", "UNKNOWN", "TEST", "NULL"} or tok.isdigit()
+
+
+def caps_name(text):
+    """Longest run of ALL-CAPS words (any alphabet), placeholders allowed inside."""
+    best, run = [], []
+    for m in _TOKEN.finditer(text):
+        tok = m.group(0).rstrip(".")
+        gap = text[run[-1][1]:m.start()] if run else " "
+        if (_is_caps_word(tok) or (run and _is_placeholder(tok)) or (not run and _is_placeholder(tok))) \
+                and tok.upper() not in ACRONYMS and gap.strip() == "":
+            run.append((tok, m.end()))
+        else:
+            if len(run) > len(best):
+                best = run
+            run = [(tok, m.end())] if (_is_caps_word(tok) and tok.upper() not in ACRONYMS) else []
+    if len(run) > len(best):
+        best = run
+    words = [w for w, _ in best]
+    if not any(_is_caps_word(w) for w in words):
+        return None
+    return " ".join(words)
 
 
 def lived_countries(note):
@@ -518,7 +560,8 @@ def decide_person(data, alert, h, person):
     # names
     verified = person.verified_name
     vparts = N.real_part_count(verified, company) if verified else 0
-    name_pool = [verified] if verified and (company or vparts >= 2) else [n for n, _ in person.record_names]
+    # the verified legal name outranks the record; one with under two real parts can't decide anything
+    name_pool = [verified] if verified else [n for n, _ in person.record_names]
     name_ok = None
     if company or any(N.real_part_count(n) >= 2 for n in name_pool):
         name_ok = N.any_agree(name_pool, hn, company)

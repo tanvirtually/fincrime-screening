@@ -27,7 +27,7 @@ CODES = {
     "UA": "Ukraine", "AE": "United Arab Emirates", "GB": "United Kingdom", "UK": "United Kingdom",
     "US": "United States", "UY": "Uruguay", "UZ": "Uzbekistan", "VE": "Venezuela", "VN": "Vietnam",
     "YE": "Yemen", "ZM": "Zambia", "ZW": "Zimbabwe", "GG": "Guernsey", "IM": "Isle of Man",
-    "GI": "Gibraltar", "KY": "Cayman Islands", "BM": "Bermuda", "BS": "Bahamas", "BB": "Barbados",
+    "GI": "Gibraltar", "CM": "Cameroon", "NP": "Nepal", "BY": "Belarus", "SN": "Senegal", "ML": "Mali", "NE": "Niger", "TD": "Chad", "CD": "DR Congo", "CG": "Congo", "AO": "Angola", "MZ": "Mozambique", "TZ": "Tanzania", "RW": "Rwanda", "LY": "Libya", "KG": "Kyrgyzstan", "TJ": "Tajikistan", "TM": "Turkmenistan", "MN": "Mongolia", "MM": "Myanmar", "KH": "Cambodia", "LA": "Laos", "BT": "Bhutan", "MV": "Maldives", "BO": "Bolivia", "CU": "Cuba", "SV": "El Salvador", "MK": "North Macedonia", "BA": "Bosnia and Herzegovina", "MU": "Mauritius", "KY": "Cayman Islands", "BM": "Bermuda", "BS": "Bahamas", "BB": "Barbados",
 }
 
 NAMES = {v for v in CODES.values()}
@@ -43,7 +43,7 @@ ALIASES = {
     "korea, democratic people's republic of": "North Korea", "dprk": "North Korea",
     "macao special administrative region of china": "Macao", "macau": "Macao",
     "hong kong special administrative region of china": "Hong Kong", "viet nam": "Vietnam",
-    "turkiye": "Turkey", "uae": "United Arab Emirates", "republic of ireland": "Ireland",
+    "turkiye": "Turkey", "democratic republic of the congo": "DR Congo", "drc": "DR Congo", "burma": "Myanmar", "macedonia": "North Macedonia", "uae": "United Arab Emirates", "republic of ireland": "Ireland",
     "syrian arab republic": "Syria", "iran, islamic republic of": "Iran", "moldova, republic of": "Moldova",
 }
 
@@ -79,7 +79,7 @@ DEMONYMS = {
     "emirati": "United Arab Emirates", "american": "United States", "uruguayan": "Uruguay",
     "uzbek": "Uzbekistan", "venezuelan": "Venezuela", "vietnamese": "Vietnam", "yemeni": "Yemen",
     "zambian": "Zambia", "zimbabwean": "Zimbabwe", "english": "United Kingdom", "scottish": "United Kingdom",
-    "welsh": "United Kingdom", "kiwi": "New Zealand",
+    "welsh": "United Kingdom", "kiwi": "New Zealand", "cameroonian": "Cameroon", "nepali": "Nepal", "nepalese": "Nepal", "belarusian": "Belarus", "senegalese": "Senegal", "malian": "Mali", "chadian": "Chad", "congolese": "DR Congo", "angolan": "Angola", "tanzanian": "Tanzania", "rwandan": "Rwanda", "libyan": "Libya", "mongolian": "Mongolia", "burmese": "Myanmar", "cambodian": "Cambodia", "bolivian": "Bolivia", "cuban": "Cuba", "salvadoran": "El Salvador", "macedonian": "North Macedonia",
 }
 
 NOT_COUNTRIES = {"international", "europe", "global", "worldwide", "n/a", "unknown", "africa", "asia",
